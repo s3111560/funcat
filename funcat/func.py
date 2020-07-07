@@ -28,31 +28,40 @@ class OneArgumentSeries(NumericSeries):
 
             try:
                 series[series == np.inf] = np.nan
-                series = self.func(series, arg)
+                series = eval(self.funcName)(series, arg)
             except Exception as e:
                 raise FormulaException(e)
         super(OneArgumentSeries, self).__init__(series)
         self.extra_create_kwargs["arg"] = arg
 
+    @property
+    def funcName(self):
+        raise NotImplementedError
+
 
 class MovingAverageSeries(OneArgumentSeries):
     """http://www.tadoc.org/indicator/MA.htm"""
-    func = talib.MA
-
+    @property
+    def funcName(self):
+        return 'talib.MA'
 
 class WeightedMovingAverageSeries(OneArgumentSeries):
     """http://www.tadoc.org/indicator/WMA.htm"""
-    func = talib.WMA
+    @property
+    def funcName(self):
+        return 'talib.WMA'
 
 
 class ExponentialMovingAverageSeries(OneArgumentSeries):
     """http://www.fmlabs.com/reference/default.htm?url=ExpMA.htm"""
-    func = talib.EMA
-
+    @property
+    def funcName(self):
+        return 'talib.EMA'
 
 class StdSeries(OneArgumentSeries):
-    func = talib.STDDEV
-
+    @property
+    def funcName(self):
+        return 'talib.STDDEV'
 
 class TwoArgumentSeries(NumericSeries):
     func = talib.STDDEV
