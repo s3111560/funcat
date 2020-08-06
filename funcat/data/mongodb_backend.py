@@ -8,7 +8,10 @@ from ..utils import lru_cache, get_str_date_from_int, get_int_date
 
 import pymongo
 import QUANTAXIS as qa
+from QUANTAXIS.QAFetch import QATdx as QATdx
 import pandas as pd
+import datetime
+
 
 # XSHG - 上证
 # XSHE - 深证
@@ -54,16 +57,32 @@ class MongodbBackend(DataBackend):
             df["datetime"] = df["date"].apply(lambda x: int(x.replace("-", "")) * 1000000)
 
         df = df[['date','open','close','high','low','volume','datetime']]
+        if freq == '1d' and (not is_index):
+           E = datetime.datetime.strptime(e, "%Y-%m-%d")
+           if not (e in df['date'].values):
+             N = datetime.datetime.today()
+             if (N.date()-E.date()).days == 0 and N.weekday() != 5 and N.weekday() != 6:
+               # get realtime
+               T = QATdx.QA_fetch_get_stock_realtime((order_book_id)).reset_index()
+               T.rename(columns = {'price':'close', 'vol' : 'volume'}, inplace = True)
+               T['date'] = T['datetime'].dt.date.apply(lambda x: x.strftime('%Y-%m-%d'))
+               T["datetime"] = T["date"].apply(lambda x: int(x.replace("-", "")) * 1000000)
+               T["volume"] = T["volume"].apply(lambda x: x * 100.0)
+               T = T[['date','open','close','high','low','volume','datetime']]
+               df = pd.concat(objs=[df, T])
+               df = df.reset_index(drop=True)
 
         arr = df.to_records()
         return arr
 
+    @lru_cache()
     def get_order_book_id_list(self):
         """获取所有的
         """
         L = list(self.db['stock_list'].find({'sec':'stock_cn', '$or': [{'sse': 'sz'}, {'sse':'sh'}]}, {'_id':0,'code':1,'sse':1}))
         return [l['sse'] == 'sz' and l['code']+'.XSHE' or l['code']+'.XSHG' for l in L]
 
+    @lru_cache()
     def get_trading_dates(self, start, end):
         """获取所有的交易日
 
@@ -78,6 +97,7 @@ class MongodbBackend(DataBackend):
                                            {'_id':0, 'date':1}).sort('date',1))
         return [get_int_date(l['date']) for l in L]
 
+    @lru_cache()
     def symbol(self, order_book_id):
         """获取order_book_id对应的名字
         :param order_book_id str: 股票代码
@@ -91,4 +111,3 @@ class MongodbBackend(DataBackend):
         nm= "UNKNOWN"
         if len(L) > 0: nm = L[0]['name']
         return "{}[{}]".format(order_book_id, nm)
-
